@@ -1,6 +1,10 @@
 require 'nokogiri'
 require 'selenium-webdriver'
 require 'optparse'
+require 'logger'
+
+require_relative 'yify_scraper'
+
 
 S_OPTIONS = Selenium::WebDriver::Chrome::Options.new()
 S_OPTIONS.add_argument 'headless'
@@ -133,6 +137,13 @@ method2 = Proc.new do |name, year, len, lang|
     driver.close
 end
 
+def method3 title, langs, year, length, source, logger
+    sub_downloader = Yify::SubScraper.new(title, langs, year, length, source, logger: logger)
+    sub_links = sub_downloader.get_sub_links
+    puts "The sub_links is:"
+    puts sub_links
+end
+
 if __FILE__ == $0
     #method1.call
     # HELP
@@ -142,6 +153,9 @@ if __FILE__ == $0
         movie: 'Logan',
         year: nil,
         len: nil,
+        source: nil,
+        langs: ['English'],
+        log_level: Logger::INFO
         }
 
     # Add argument
@@ -151,8 +165,21 @@ if __FILE__ == $0
         opts.on('-l', '--lang L', "Specify the subtitle language") {|l| options[:lang] = l}
         opts.on('-y', '--year y', "Specify the movie year") {|y| options[:year] = y}
         opts.on('-L', '--len L', "Specify the movie length in minutes") {|l| options[:len] = l}
+        opts.on('-s', '--source S', "Specify the source of the movie") {|s| options[:source] = s}
+        opts.on('--langs L', "Specify list of languages") {|ls| options[:langs] = ls.split(',')}
+        opts.on('--log_level L', "Specify the log level of the test") do |l|
+            options[:log_level] = Logger::ERROR if l == 'error'
+            options[:log_level] = Logger::WARN if l == 'warning'
+            options[:log_level] = Logger::DEBUG if l == 'debug'
+        end
     end.parse!
-
+        
+    # Init the logger
+    logger = Logger.new(STDOUT)
+    logger.level = options[:log_level]
+    logger.datetime_format = "%Y-%m-%d %H:%M:%S"
+    
     name = options[:movie].gsub(' ', '+')
-    method2.call(name, options[:year].to_i, options[:len].to_i, options[:lang])
+    #method2.call(name, options[:year].to_i, options[:len].to_i, options[:lang])
+    method3(name, options[:langs], options[:year].to_i, options[:len].to_i, options[:source], logger)
 end

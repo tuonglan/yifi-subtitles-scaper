@@ -1,17 +1,21 @@
 require 'selenium-webdriver'
 require 'nokogiri'
+require 'cgi'
 
 
 module Yify
     S_OPTIONS = Selenium::WebDriver::Chrome::Options.new(args: ['headless'])
     S_OPTIONS.add_argument '--no-proxy-server'
     YIFY = "https://www.yifysubtitles.com"
+    BLURAY = /blu-ray|bluray|bdrip|brip|brrip|bdr/
+    WEBRIP = /web-dl|webrip|web|web-rip|webdl/
 
     class SubScraper
         def initialize title, langs, year=nil, length=nil, source=nil, logger: 
             @logger = logger
 
-            @title = title.strip().gsub(' ', '+')
+            @original_title = title
+            @title = CGI.escape title
             @langs = langs
             @year = year
             @length = length
@@ -81,6 +85,8 @@ module Yify
             xml_table = Nokogiri::XML ele_table.attribute('innerHTML')
 
             # Get tables of subtitles
+            links = {}
+            @langs.each {|l| links[l] = []}
             sub_links = Hash[@langs.product]
             xml_trs = xml_table.xpath("//tr")[1..-1]
             @logger.debug "Found #{xml_trs.length} subtitles for #{@title}"
@@ -103,6 +109,10 @@ module Yify
                     txt = tr.xpath(".//a")[0].content.downcase
                     if not txt.include? source
                         @logger.debug "Skip #{txt} because not for source #{@source}"
+
+                        # Save to links for later usage
+                        links[lang] << ["#{YIFY}#{tr.xpath(".//a/@href")[0]}", txt]
+
                         next
                     end
                 end
@@ -113,6 +123,23 @@ module Yify
                 @logger.debug "Lang: #{lang}, page: #{link}"
             end
             
+            # If the link of a specific language is not chosen, revision the links
+            source = @source.downcase
+            @langs.each do |lang|
+                if not sub_links[lang]
+                    best_link = nil
+                    links[lang].each do |link, txt|
+                        best_link = best_link || link
+                        if link.match(BLURAY) && source.match(BLURAY)
+                            best_link = link
+                        elsif link.match(WEBRIP) && source.match(WEBRIP)
+                            best_link = link
+                        end
+                    end
+                    sub_links[lang] = best_link
+                end
+            end
+
             sub_links
         end
 

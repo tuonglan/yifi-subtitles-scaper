@@ -19,6 +19,41 @@ module Tools
         return 'unk'
     end
 
+    def self.scan_dir dir
+        ptt = /(.*?) \((\d+)\)(?: \[(\w+)\])?(?: \[(\w+)\])?.*/
+        digits = Array(1..9).map(&:to_s)
+        data = {}
+        err = []
+        Dir.entries(dir).select {|d| File.directory? File.join(dir, d)}.each do |d|
+            # Gather name, year, source, quality
+            r = ptt.match d
+            if not r
+                err << d
+                next
+            end
+            source = nil
+            quality = nil
+            [3, 4].each do |i|
+                if r[i]
+                    if r[i].start_with? *digits
+                        quality = r[i]
+                    else
+                        source = r[i]
+                    end
+                end
+            end
+
+            data[d] = {
+                'name' => r[1],
+                'year' => r[2].to_i,
+                'source' => source,
+                'quality' => quality
+            }
+        end
+
+        return data, err
+    end
+
     class SubDownloader
         def initialize logger:
             @logger = logger
@@ -40,6 +75,9 @@ module Tools
                     while entry = zip.get_next_entry
                         sub_ext = File.extname entry.name
                         extract_file = "#{base_path}.#{lang_code}#{sub_ext}"
+        
+                        # Backup file if already exits
+                        File.rename(extract_file, "#{extract_file}.bk") if File.file? extract_file
                         @logger.debug "Found #{entry.name}, extracting to #{extract_file}..."
                         entry.extract extract_file
                     end
